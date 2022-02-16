@@ -6,8 +6,6 @@ import std/uri
 import std/os
 import std/asyncdispatch
 
-var chan: Channel[string]
-
 proc parse_instruction(command: string, location: string, cmd_line: string): bool =
     case command:
     of "spawn":
